@@ -1,0 +1,120 @@
+esphome:
+  name: power-extension
+  friendly_name: "Bunty Smart Hub"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+wifi:
+  ssid: "Excitel_ASURAAS"
+  password: "Utsaah@8769"
+  power_save_mode: NONE
+  manual_ip:
+    static_ip: 192.168.1.50
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+    dns1: 8.8.8.8
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+mqtt:
+  broker: 192.168.1.90
+  topic_prefix: room
+  discovery: false
+  birth_message:
+    topic: room/status
+    payload: online
+  will_message:
+    topic: room/status
+    payload: offline
+
+api:
+logger:
+ota:
+  - platform: esphome
+
+esp32_ble_tracker:
+  scan_parameters:
+    duration: 5s
+    interval: 320ms
+    window: 300ms
+
+# Simplified Speaker Track
+ble_client:
+  - mac_address: 52:95:C8:48:A4:2A
+    id: speaker_client
+
+web_server:
+  port: 80
+
+sensor:
+  - platform: dht
+    pin: GPIO21
+    model: AM2302
+    temperature: { name: "temp", id: room_temp }
+    humidity: { name: "humi", id: room_humi }
+    update_interval: 10s
+  - platform: wifi_signal
+    name: "wifi"
+  - platform: uptime
+    name: "uptime"
+  
+  # Speaker Data
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: speaker_client
+    id: speaker_battery
+    name: "speaker_battery"
+    service_uuid: '180F'
+    characteristic_uuid: '2A19'
+    update_interval: 60s
+  
+  - platform: ble_rssi
+    mac_address: 52:95:C8:48:A4:2A
+    name: "speaker_rssi"
+
+switch:
+  - platform: gpio
+    pin: {number: GPIO17, inverted: true}
+    name: "relay_1"
+    id: relay_1
+    restore_mode: ALWAYS_ON
+  - platform: gpio
+    pin: {number: GPIO5, inverted: true}
+    name: "relay_2"
+    id: relay_2
+    restore_mode: ALWAYS_ON
+  - platform: gpio
+    pin: {number: GPIO18, inverted: true}
+    name: "relay_3"
+    id: relay_3
+    restore_mode: ALWAYS_ON
+  - platform: gpio
+    pin: {number: GPIO19, inverted: true}
+    name: "relay_4"
+    id: relay_4
+    restore_mode: ALWAYS_ON
+  - platform: gpio
+    pin: {number: GPIO16, inverted: true}
+    name: "relay_5"
+    id: relay_5
+    restore_mode: ALWAYS_ON
+
+binary_sensor:
+  - platform: ble_presence
+    mac_address: 52:95:C8:48:A4:2A
+    name: "speaker_status"
+  - platform: gpio
+    pin: {number: GPIO23, mode: INPUT_PULLUP, inverted: true}
+    name: "switch_2"
+    on_state:
+      then: [if: {condition: {lambda: 'return x;'}, then: [switch.turn_on: relay_2], else: [switch.turn_off: relay_2]}]
+  - platform: gpio
+    pin: {number: GPIO22, mode: INPUT_PULLUP, inverted: true}
+    name: "switch_3"
+    on_state:
+      then: [if: {condition: {lambda: 'return x;'}, then: [switch.turn_on: relay_3], else: [switch.turn_off: relay_3]}]

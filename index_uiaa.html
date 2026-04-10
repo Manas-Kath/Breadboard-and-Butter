@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cozy Hub • Mocha Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Quicksand:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-walnut: url('https://plus.unsplash.com/premium_photo-1756717242684-87f15e3daaf3?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDEyfHx8ZW58MHx8fHx8');
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --accent-amber: #ff9800;
+            --text-gold: #e4d4bc;
+            --text-dim: #a89a85;
+            --tile-bg: rgba(45, 30, 30, 0.4);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Quicksand', sans-serif; -webkit-user-select: none; user-select: none; }
+        
+        body {
+            background: var(--bg-walnut) no-repeat center center fixed;
+            background-size: cover;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            color: var(--text-gold);
+        }
+
+        /* 1. The Glass Core (Blur 10px, Colorless) */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.01); /* Pure colorless base */
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 50px;
+            width: 88vw;
+            height: 82vh;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+            border-top: 1.2px solid rgba(255,255,255,0.3);
+            border-left: 1.2px solid rgba(255,255,255,0.2);
+            border-bottom: 1.5px solid rgba(0,0,0,0.4);
+            border-right: 1.5px solid rgba(0,0,0,0.4);
+            z-index: 10;
+            overflow: hidden;
+        }
+
+        /* Restored Refraction without color shift */
+        .glass-panel::before {
+            content: ''; position: absolute; top: -20%; left: -10%; width: 70%; height: 50%;
+            background: radial-gradient(ellipse at center, rgba(255,255,255,0.08) 0%, transparent 75%);
+            transform: rotate(-15deg); pointer-events: none; z-index: 1;
+        }
+
+        .glass-panel::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 40%);
+            pointer-events: none; z-index: 1;
+        }
+
+        /* Typography Restoration */
+        #clock {
+            font-family: 'Playfair Display', serif;
+            font-size: 11rem;
+            font-weight: 700;
+            line-height: 0.85;
+            text-shadow: 0 10px 35px rgba(0,0,0,0.5);
+            margin-bottom: 5px;
+            color: var(--text-gold);
+        }
+        #date {
+            text-transform: uppercase;
+            letter-spacing: 10px;
+            font-size: 1.1rem;
+            color: var(--text-dim);
+            margin-bottom: 3.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* 2. Controls Grid */
+        .grid-container {
+            background: rgba(0,0,0,0.3);
+            padding: 30px;
+            border-radius: 35px;
+            box-shadow: inset 6px 6px 15px rgba(0,0,0,0.8), inset -2px -2px 8px rgba(255,255,255,0.04);
+            margin-top: 20px;
+            z-index: 20;
+        }
+
+        .grid { display: flex; gap: 20px; }
+
+        .tile {
+            width: 95px; height: 125px;
+            border-radius: 22px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: var(--tile-bg);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            border-left: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 2px solid rgba(0,0,0,0.3);
+            border-right: 2px solid rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 4px 4px 12px rgba(0,0,0,0.4);
+        }
+
+        .tile.active {
+            background: rgba(255, 152, 0, 0.15);
+            border-color: rgba(255, 152, 0, 0.5);
+            box-shadow: 0 0 30px rgba(255, 152, 0, 0.3), inset 0 0 12px rgba(255, 152, 0, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .tile:active { transform: translateY(2px) scale(0.96); }
+        .tile .icon { font-size: 2.4rem; margin-bottom: 8px; filter: grayscale(1) opacity(0.4); transition: 0.3s; }
+        .tile.active .icon { filter: grayscale(0) opacity(1) drop-shadow(0 0 12px var(--accent-amber)); }
+        .tile .label { font-size: 0.75rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+
+        /* 3. Sticky Notes */
+        .notes-container { position: fixed; left: 3.5rem; top: 3.5rem; z-index: 100; pointer-events: none; }
+        .sticky-note {
+            background: #fdf2d0; color: #4b3621; width: 230px; min-height: 140px; padding: 35px 25px 25px;
+            box-shadow: 12px 12px 30px rgba(0,0,0,0.4); position: relative; margin-bottom: 3.5rem; border-radius: 2px;
+            font-size: 1.1rem; line-height: 1.4; display: flex; align-items: center; justify-content: center; text-align: center;
+            pointer-events: auto; cursor: grab; background: linear-gradient(135deg, #fdf2d0 85%, #f5e9be 100%);
+        }
+        .sticky-note::before {
+            content: ''; position: absolute; top: -12px; left: 50%; margin-left: -45px; width: 90px; height: 32px;
+            background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); transform: rotate(1.5deg); z-index: 10; border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .media-glass {
+            position: fixed; bottom: 2.5rem; right: 3rem;
+            background: rgba(0, 0, 0, 0.5); /* Match main glass logic */
+            backdrop-filter: blur(10px) brightness(0.8);
+            -webkit-backdrop-filter: blur(10px) brightness(0.8);
+            border-top: 1px solid rgba(255,255,255,0.1); border-left: 1px solid rgba(255,255,255,0.05);
+            border-radius: 35px; padding: 20px 25px;
+            display: none; align-items: center; width: 550px; z-index: 100;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .beat-led {
+            width: 12px; height: 12px; border-radius: 50%; background: #444;
+            margin-right: 15px; box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transition: background 0.05s, box-shadow 0.05s;
+        }
+        .beat-led.flash {
+            background: #00ff00; box-shadow: 0 0 15px #00ff00, 0 0 30px #00ff00;
+        }
+
+        .debug-overlay {
+            position: absolute; top: -45px; right: 20px;
+            background: rgba(0,0,0,0.7); padding: 5px 12px; border-radius: 10px;
+            font-family: monospace; font-size: 0.7rem; color: #00ff00;
+            display: flex; gap: 15px; pointer-events: none; border: 1px solid rgba(0,255,0,0.2);
+        }
+
+        .cat-box {
+            width: 70px; height: 70px; margin-right: 15px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .cat-img {
+            width: 100%; height: 100%; object-fit: contain;
+            animation: vibe var(--vibe-dur, 0.5s) ease-in-out infinite;
+            animation-play-state: paused;
+        }
+        @keyframes vibe {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.15) translateY(-5px); filter: brightness(1.2); }
+        }
+
+        .album-art {
+            width: 75px; height: 75px; border-radius: 50%; background: #222; margin-right: 18px; flex-shrink: 0;
+            border: 1.5px solid rgba(255,255,255,0.15); overflow: hidden; box-shadow: 0 0 15px rgba(0,0,0,0.4);
+            display: flex; align-items: center; justify-content: center; font-size: 2rem;
+        }
+        .album-art img { width: 100%; height: 100%; object-fit: cover; }
+
+        .media-info { flex-grow: 1; overflow: hidden; }
+        .track-name { font-weight: 700; font-size: 1rem; color: var(--text-gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-sub { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 6px; }
+
+        .media-vol { display: flex; align-items: center; gap: 8px; margin-top: 8px; opacity: 0.6; }
+        .vol-slider { flex-grow: 1; height: 3px; -webkit-appearance: none; background: rgba(255,255,255,0.1); border-radius: 2px; }
+        .vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; background: var(--text-dim); border-radius: 50%; cursor: pointer; }
+
+        .progress-bar { background: rgba(255,255,255,0.08); height: 4px; border-radius: 2px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent-amber); width: 0%; box-shadow: 0 0 8px var(--accent-amber); transition: width 1s linear; }
+
+        .media-ctrls { display: flex; gap: 12px; margin-left: 15px; }
+        .ctrl-btn { background: none; border: none; font-size: 1.4rem; color: var(--text-gold); cursor: pointer; opacity: 0.6; transition: 0.2s; }
+        .ctrl-btn:active { transform: scale(0.9); opacity: 1; }
+
+        /* Stats Capsule */
+        .stats-row { display: flex; gap: 30px; margin-top: 3.5rem; z-index: 20; }
+        .stat-pill {
+            background: rgba(0,0,0,0.25); padding: 10px 25px; border-radius: 50px;
+            border: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; gap: 12px;
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.4);
+        }
+        .stat-val { font-size: 1.6rem; font-weight: 300; }
+        .stat-lab { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 2px; }
+
+        /* Modal */
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+        .modal-card { background: #241818; width: 90%; max-width: 650px; border-radius: 40px; padding: 3rem; box-shadow: 0 25px 60px rgba(0,0,0,0.7); border: 1px solid #332222; }
+        .tabs { display: flex; margin-bottom: 2rem; background: rgba(0,0,0,0.15); padding: 8px; border-radius: 20px; }
+        .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; color: var(--text-dim); border-radius: 15px; font-weight: 600; font-size: 0.9rem; transition: 0.3s; }
+        .tab.active { background: var(--accent-amber); color: #fff; box-shadow: 0 5px 15px rgba(255, 152, 0, 0.25); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        input, select { width: 100%; padding: 15px; margin-bottom: 15px; border-radius: 15px; border: 1px solid #332222; background: #150d0d; color: #fff; font-size: 1rem; }
+        .btn-action { width: 100%; padding: 18px; border-radius: 18px; border: none; background: var(--accent-amber); color: #fff; font-weight: 700; font-size: 1.1rem; cursor: pointer; }
+        .btn-action:active { transform: scale(0.98); }
+        .toast { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: var(--accent-amber); color: white; padding: 15px 35px; border-radius: 50px; box-shadow: 0 12px 30px rgba(0,0,0,0.4); z-index: 3000; opacity: 0; pointer-events: none; font-weight: 600; transition: all 0.4s; }
+        .toast.show { opacity: 1; bottom: 140px; }
+        .top-right { position: absolute; top: 2.5rem; right: 3.5rem; z-index: 100; }
+        .gear-btn { background: none; border: none; font-size: 2rem; cursor: pointer; opacity: 0.4; color: var(--text-gold); transition: 0.3s; }
+    </style>
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+    <div class="notes-container" id="notes"></div>
+    <div class="top-right"><button class="gear-btn" onclick="openM()">⚙️</button></div>
+
+    <div class="glass-panel">
+        <div id="clock">00:00</div>
+        <div id="date">Welcome Home</div>
+        <div class="grid-container">
+            <div class="grid">
+                <div class="tile" id="r1" onclick="t(1)"><div class="icon">🔌</div><div class="label">Charger</div></div>
+                <div class="tile" id="r2" onclick="t(2)"><div class="icon">💡</div><div class="label">Lamp</div></div>
+                <div class="tile" id="r3" onclick="t(3)"><div class="icon">🔋</div><div class="label">Outlet</div></div>
+                <div class="tile" id="r4" onclick="t(4)"><div class="icon">🌬️</div><div class="label">Fan</div></div>
+                <div class="tile" id="r5" onclick="t(5)"><div class="icon">💻</div><div class="label">Work</div></div>
+            </div>
+        </div>
+        <div class="stats-row">
+            <div class="stat-pill"><span class="stat-lab">Temp</span><span class="stat-val" id="tDisp">--°</span></div>
+            <div class="stat-pill"><span class="stat-lab">Humi</span><span class="stat-val" id="hDisp">--%</span></div>
+        </div>
+    </div>
+
+    <div class="media-glass" id="media-panel">
+        <div class="debug-overlay" id="debug-info" style="display:none;">
+            <span>BPM: <b id="dbg-bpm">--</b></span>
+            <span>LAT: <b id="dbg-lat">--</b>ms</span>
+            <span>PHASE: <b id="dbg-phase">--</b></span>
+        </div>
+        <div class="beat-led" id="beat-led"></div>
+        <div class="cat-box" id="cat-container">
+            <img src="https://media.tenor.com/TE-4ME76MXsAAAAj/maxwell-the-cat.gif" 
+                 class="cat-img" id="cat-img" 
+                 referrerpolicy="no-referrer"
+                 onerror="this.style.display='none'; document.getElementById('cat-fallback').style.display='block';">
+            <div id="cat-fallback" style="display:none; font-size: 2.5rem;">🐱</div>
+        </div>
+        <div class="album-art" id="media-art" onclick="mediaCmd('toggle')">☕</div>
+        <div class="media-info">
+            <div class="track-name" id="sStatus">Nothing Playing</div>
+            <div class="track-sub">Mocha Hub • <span id="sBat">--%</span></div>
+            <div class="progress-bar"><div id="sBar" class="progress-fill"></div></div>
+        </div>
+        <div class="media-ctrls">
+            <button class="ctrl-btn" onclick="mediaCmd('prev')">⏮</button>
+            <button class="ctrl-btn" onclick="mediaCmd('next')">⏭</button>
+        </div>
+    </div>
+
+    <div id="modal">
+        <div class="modal-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
+                <h2 style="font-family: 'Playfair Display', serif; color: var(--text-gold); font-size: 2.2rem;">Control Deck</h2>
+                <button onclick="closeM()" style="background:none; border:none; font-size:2.5rem; cursor:pointer; color:var(--text-dim);">✕</button>
+            </div>
+            <div class="tabs">
+                <div class="tab active" onclick="setTab(0)">Quick Task</div>
+                <div class="tab" onclick="setTab(1)">Active Log</div>
+                <div class="tab" onclick="setTab(2)">Network</div>
+            </div>
+            <div class="tab-content active" id="tab0">
+                <select id="typeS" onchange="toggleType()"><option value="timer">Quick Timer (Minutes)</option><option value="schedule">Recurring Routine</option></select>
+                <select id="rSel">
+                    <option value="room/switch/relay_1/command">Charger</option><option value="room/switch/relay_2/command">Lamp</option>
+                    <option value="room/switch/relay_3/command">Outlet</option><option value="room/switch/relay_4/command">Fan</option>
+                    <option value="room/switch/relay_5/command">Work</option>
+                </select>
+                <select id="aSel"><option value="OFF">Turn OFF</option><option value="ON">Turn ON</option></select>
+                <input type="number" id="valI" placeholder="Time in minutes..."><input type="time" id="timeI" style="display:none;">
+                <div id="dayS" style="display:none; margin:15px 0; font-size:0.9rem; display:flex; justify-content:space-between;">
+                    <label><input type="checkbox" value="1" checked> M</label><label><input type="checkbox" value="2" checked> T</label>
+                    <label><input type="checkbox" value="3" checked> W</label><label><input type="checkbox" value="4" checked> T</label>
+                    <label><input type="checkbox" value="5" checked> F</label><label><input type="checkbox" value="6" checked> S</label>
+                    <label><input type="checkbox" value="0" checked> S</label>
+                </div>
+                <button class="btn-action" onclick="addR()">Activate Routine</button>
+            </div>
+            <div class="tab-content" id="tab1"><div id="routineList" style="max-height: 300px; overflow-y: auto;"></div></div>
+            <div class="tab-content" id="tab2">
+                <input type="text" id="hostI" placeholder="Host IP"><input type="number" id="portI" placeholder="Port">
+                <button class="btn-action" onclick="saveS()">Save & Reconnect</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var cfg = { h: localStorage.getItem('mq_h') || "100.125.241.104", p: parseInt(localStorage.getItem('mq_p')) || 9001 };
+        var cli = new Paho.MQTT.Client(cfg.h, cfg.p, "MochaUI_" + Math.random().toString(16).slice(2, 6));
+
+        function showToast(msg) {
+            var t = document.getElementById('toast'); t.innerText = msg; t.className = 'toast show';
+            setTimeout(function() { t.className = 'toast'; }, 3000);
+        }
+
+        function updateClock() {
+            var n = new Date(); var h = n.getHours().toString(); var m = n.getMinutes().toString();
+            if (h.length < 2) h = "0" + h; if (m.length < 2) m = "0" + m;
+            document.getElementById('clock').innerText = h + ":" + m;
+            document.getElementById('date').innerText = n.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        }
+        setInterval(updateClock, 1000); updateClock();
+
+        function t(id) {
+            if (!cli.isConnected()) { showToast("Broker Offline"); return; }
+            var el = document.getElementById('r' + id);
+            var val = el.className.indexOf('active') !== -1 ? "OFF" : "ON";
+            var m = new Paho.MQTT.Message(val); m.destinationName = "room/switch/relay_" + id + "/command";
+            m.retained = true; cli.send(m);
+        }
+
+        function mediaCmd(cmd, val) {
+            if (!cli.isConnected()) return;
+            var payload = val ? cmd.toUpperCase() + ":" + val : cmd.toUpperCase();
+            var m = new Paho.MQTT.Message(payload); m.destinationName = "room/media/command"; cli.send(m);
+        }
+
+        cli.onConnectionLost = function() { setTimeout(function() { cli.connect({ onSuccess: onConn, useSSL: false }); }, 5000); };
+        function onConn() { cli.subscribe("room/#"); showToast("Connected"); }
+
+        cli.onMessageArrived = function(m) {
+            var topic = m.destinationName; var payload = m.payloadString;
+            console.log("[MQTT] Topic:", topic, "Payload:", payload);
+
+            if(topic.indexOf("relay_") !== -1) {
+                var match = topic.match(/relay_(\d)/);
+                if (match) { var el = document.getElementById('r'+match[1]); el.className = (payload === "ON") ? "tile active" : "tile"; }
+            }
+            if(topic === "room/sensor/temp/state") document.getElementById('tDisp').innerText = Math.round(parseFloat(payload)) + "°";
+            if(topic === "room/sensor/humi/state") document.getElementById('hDisp').innerText = Math.round(parseFloat(payload)) + "%";
+            if(topic === "room/sensor/speaker_battery/state") { document.getElementById('sBat').innerText = payload + "%"; }
+            
+            if(topic === "room/media/status") {
+                var panel = document.getElementById('media-panel');
+                var led = document.getElementById('beat-led');
+                var debugEl = document.getElementById('debug-info');
+                
+                try {
+                    var data = JSON.parse(payload);
+                    if (data.title && data.isPlaying) {
+                        panel.style.display = 'flex';
+                        if(debugEl) debugEl.style.display = 'flex';
+                        document.getElementById('sStatus').innerText = data.title;
+                        
+                        var artEl = document.getElementById('media-art');
+                        if (data.albumArt) { artEl.innerHTML = '<img src="' + data.albumArt + '">'; artEl.style.padding = "0"; }
+                        else { artEl.innerHTML = "☕"; }
+                        if (data.duration > 0) { document.getElementById('sBar').style.width = (data.progress / data.duration * 100) + "%"; }
+                        
+                        // --- High Precision Sync Logic ---
+                        if (data.tempo && data.tempo > 0) {
+                            var beatMs = 60000 / data.tempo;
+                            var arrivalTime = Date.now();
+                            var latency = arrivalTime - (data.timestamp || arrivalTime);
+                            var currentProgress = data.progress + latency;
+                            
+                            if(document.getElementById('dbg-bpm')) document.getElementById('dbg-bpm').innerText = Math.round(data.tempo);
+                            if(document.getElementById('dbg-lat')) document.getElementById('dbg-lat').innerText = latency;
+                            
+                            // Correct drift calculation: check against expected progress
+                            var timeSinceLastSync = arrivalTime - (window.lastSyncTime || 0);
+                            var expectedProgress = (window.lastSyncProgress || 0) + timeSinceLastSync;
+                            var drift = Math.abs(expectedProgress - currentProgress);
+
+                            // Reset ONLY if tempo changed OR drift is massive (> 1s) OR first time
+                            if (window.lastTempo !== data.tempo || drift > 1000 || !window.beatInterval) {
+                                window.lastTempo = data.tempo;
+                                window.lastSyncTime = arrivalTime;
+                                window.lastSyncProgress = currentProgress;
+
+                                var cat = document.getElementById('cat-img');
+                                if(cat) {
+                                    var phase = (currentProgress % beatMs) / beatMs;
+                                    cat.style.setProperty('--vibe-dur', (beatMs/1000) + 's');
+                                    cat.style.animationDelay = (-(phase * (beatMs/1000))) + 's';
+                                    cat.style.animationPlayState = 'running';
+                                }
+
+                                if (window.beatInterval) clearInterval(window.beatInterval);
+                                if (window.beatTimeout) clearTimeout(window.beatTimeout);
+                                
+                                var triggerFlash = function() {
+                                    if(led) {
+                                        led.className = 'beat-led flash';
+                                        setTimeout(function() { led.className = 'beat-led'; }, 80);
+                                    }
+                                };
+
+                                var msUntilNextBeat = beatMs - (currentProgress % beatMs);
+                                window.beatTimeout = setTimeout(function() {
+                                    triggerFlash();
+                                    window.beatInterval = setInterval(triggerFlash, beatMs);
+                                }, msUntilNextBeat);
+                            }
+                            
+                            // Always update phase debug
+                            if(document.getElementById('dbg-phase')) {
+                                var p = (currentProgress % beatMs) / beatMs;
+                                document.getElementById('dbg-phase').innerText = p.toFixed(2);
+                            }
+                        }
+                    } else { 
+                        panel.style.display = 'none'; 
+                        if(debugEl) debugEl.style.display = 'none';
+                        if (window.beatInterval) { clearInterval(window.beatInterval); window.beatInterval = null; }
+                        if (window.beatTimeout) { clearTimeout(window.beatTimeout); window.beatTimeout = null; }
+                        var cat = document.getElementById('cat-img');
+                        if(cat) cat.style.animationPlayState = 'paused';
+                        window.lastTempo = 0;
+                    }
+                } catch(e) { console.error("[MEDIA] Error:", e); }
+            }
+
+            if(topic === "room/routine/list") { try { renderRoutines(JSON.parse(payload)); } catch(e) {} }
+            if(topic === "room/memo/list") { try { renderMemos(JSON.parse(payload)); } catch(e) {} }
+            if(topic === "room/notify") showToast(payload);
+        };
+
+        function renderRoutines(list) {
+            var container = document.getElementById('routineList'); if(!container) return;
+            container.innerHTML = list.length ? "" : "<p style='color:var(--text-dim); text-align:center;'>No active routines.</p>";
+            for (var i = 0; i < list.length; i++) {
+                var r = list[i]; var item = document.createElement('div'); item.className = 'routine-item';
+                var relayName = r.target.split('/').slice(-2, -1)[0].replace('relay_', 'R');
+                var info = r.type === 'timer' ? "Ends in " + Math.round((r.triggerAt - Date.now())/60000) + "m" : r.time;
+                item.innerHTML = '<div><b style="color:var(--accent-amber)">' + r.action + '</b> ' + relayName + ' • ' + info + '</div><button class="del-btn" onclick="delR(\'' + r.id + '\')">✕</button>';
+                container.appendChild(item);
+            }
+        }
+
+        function renderMemos(memos) {
+            var container = document.getElementById('notes'); if(!container) return; container.innerHTML = "";
+            for (var i = 0; i < memos.length; i++) {
+                var m = memos[i]; var note = document.createElement('div'); note.className = 'sticky-note'; note.innerHTML = m.text;
+                note.setAttribute('data-id', m.id); var rot = (Math.random() * 12 - 6).toFixed(1);
+                note.setAttribute('data-rot', rot); note.style.transform = 'rotate(' + rot + 'deg)';
+                applySwipeLogic(note); container.appendChild(note);
+            }
+        }
+
+        function applySwipeLogic(el) {
+            var startX = 0, currentX = 0, isDragging = false; var baseRot = parseFloat(el.getAttribute('data-rot') || 0);
+            var onStart = function(e) { startX = (e.type === 'mousedown' ? e.clientX : e.touches[0].clientX); isDragging = true; el.style.transition = 'none'; el.style.zIndex = "500"; };
+            var onMove = function(e) { if (!isDragging) return; currentX = (e.type === 'mousemove' ? e.clientX : e.touches[0].clientX) - startX; if (currentX > 0) { el.style.transform = 'translateX(' + currentX + 'px) rotate(' + (baseRot + currentX/15) + 'deg)'; el.style.opacity = 1 - (currentX / 400); } };
+            var onEnd = function() { if (!isDragging) return; isDragging = false; el.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; if (currentX > 180) { el.style.transform = 'translateX(600px) rotate(' + (baseRot + 45) + 'deg)'; el.style.opacity = '0'; delMemo(el.getAttribute('data-id')); } else { el.style.transform = 'rotate(' + baseRot + 'deg)'; el.style.opacity = '1'; el.style.zIndex = "100"; } currentX = 0; };
+            el.addEventListener('mousedown', onStart); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onEnd);
+            el.addEventListener('touchstart', onStart); el.addEventListener('touchmove', onMove); el.addEventListener('touchend', onEnd);
+        }
+
+        function addR() {
+            var type = document.getElementById('typeS').value;
+            var cmd = { op: type, target: document.getElementById('rSel').value, action: document.getElementById('aSel').value };
+            if(type === 'timer') cmd.minutes = parseInt(document.getElementById('valI').value);
+            else { cmd.time = document.getElementById('timeI').value; var days = []; var checks = document.querySelectorAll('#dayS input:checked'); for (var i = 0; i < checks.length; i++) days.push(parseInt(checks[i].value)); cmd.days = days; }
+            var m = new Paho.MQTT.Message(JSON.stringify(cmd)); m.destinationName = "room/routine/cmd"; cli.send(m); setTab(1);
+        }
+        function delR(id) { var m = new Paho.MQTT.Message(JSON.stringify({op:'delete', id: id})); m.destinationName = "room/routine/cmd"; cli.send(m); }
+        function delMemo(id) { var m = new Paho.MQTT.Message(JSON.stringify({op:'delete', id: id})); m.destinationName = "room/memo/cmd"; cli.send(m); }
+        function toggleType() { var isT = document.getElementById('typeS').value === 'timer'; document.getElementById('valI').style.display = isT ? 'block' : 'none'; document.getElementById('timeI').style.display = isT ? 'none' : 'block'; document.getElementById('dayS').style.display = isT ? 'none' : 'flex'; }
+        function openM() { document.getElementById('hostI').value = cfg.h; document.getElementById('portI').value = cfg.p; document.getElementById('modal').style.display = 'flex'; }
+        function closeM() { document.getElementById('modal').style.display = 'none'; }
+        function saveS() { localStorage.setItem('mq_h', document.getElementById('hostI').value); localStorage.setItem('mq_p', document.getElementById('portI').value); location.reload(); }
+        function setTab(idx) { var tabs = document.querySelectorAll('.tab'); var conts = document.querySelectorAll('.tab-content'); for (var i = 0; i < tabs.length; i++) { tabs[i].className = (i === idx) ? "tab active" : "tab"; conts[i].className = (i === idx) ? "tab-content active" : "tab-content"; } }
+
+        cli.connect({ onSuccess: onConn, useSSL: false });
+    </script>
+</body>
+</html>

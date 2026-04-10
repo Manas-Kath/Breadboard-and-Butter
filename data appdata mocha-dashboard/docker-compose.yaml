@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    container_name: mocha-scheduler
+    volumes:
+      - ./scheduler.js:/app/scheduler.js
+      - ./routines.json:/app/routines.json
+      - ./memos.json:/app/memos.json
+    restart: always
+    environment:
+      - NODE_ENV=production

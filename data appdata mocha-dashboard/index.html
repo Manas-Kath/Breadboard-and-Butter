@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cozy Hub • Nurpur</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Quicksand:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-wood: #231515; 
+            --panel-bg: rgba(35, 21, 21, 0.75);
+            --surface: #362626;
+            --accent: #d97706;
+            --text-gold: #e4d4bc;
+            --text-dim: #a89a85;
+            --tile-inset: inset 3px 3px 8px rgba(0,0,0,0.6), inset -1px -1px 2px rgba(255,255,255,0.05);
+            --tile-outset: 6px 6px 15px rgba(0,0,0,0.5), -1px -1px 2px rgba(255,255,255,0.05);
+            --radius: 15px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Quicksand', sans-serif; transition: all 0.3s ease; -webkit-user-select: none; user-select: none; }
+        
+        body {
+            background-color: var(--bg-wood);
+            /* Enhanced Wood Grain Pattern */
+            background-image: 
+                linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.15) 50%, transparent 100%),
+                repeating-linear-gradient(0deg, transparent 0px, transparent 1px, rgba(255,255,255,0.03) 1px, rgba(255,255,255,0.03) 2px),
+                repeating-linear-gradient(90deg, #2c1a1a 0px, #2c1a1a 200px, #231515 200px, #231515 400px);
+            background-size: 100% 100%, 100% 4px, 400px 100%;
+            color: var(--text-gold);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .header { position: absolute; top: 1.5rem; width: calc(100% - 3rem); display: flex; justify-content: space-between; align-items: center; z-index: 50; }
+        
+        .clock-section { text-align: center; margin-bottom: 2.5rem; }
+        #clock {
+            font-family: 'Playfair Display', serif;
+            font-size: 10rem;
+            font-weight: 700;
+            margin: 0;
+            line-height: 0.9;
+            text-shadow: 6px 6px 20px rgba(0,0,0,0.8);
+        }
+        #date {
+            text-transform: uppercase;
+            letter-spacing: 6px;
+            margin-top: 15px;
+            opacity: 0.8;
+            font-size: 1.2rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .grid {
+            background: var(--panel-bg);
+            padding: 30px 35px;
+            border-radius: 40px;
+            display: flex;
+            box-shadow: var(--tile-inset);
+            z-index: 10;
+            justify-content: center;
+            border: 1px solid rgba(0,0,0,0.3);
+        }
+
+        .tile {
+            background: var(--surface);
+            width: 85px;
+            height: 115px;
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--tile-outset);
+            border: 1px solid #453232;
+            cursor: pointer;
+            margin: 0 15px;
+            flex-shrink: 0;
+        }
+
+        .tile.active {
+            box-shadow: var(--tile-inset);
+            background: #1a1010;
+            transform: scale(0.95) translateY(2px);
+            border-color: var(--accent);
+        }
+        .tile .icon { font-size: 1.8rem; margin-bottom: 5px; filter: sepia(0.6) brightness(0.8); }
+        .tile.active .icon { filter: sepia(0) brightness(1.2) drop-shadow(0 0 10px var(--accent)); }
+        .tile .label { font-size: 0.7rem; font-weight: bold; color: var(--text-dim); text-align: center; }
+
+        .stats-row { display: flex; margin-top: 2.5rem; z-index: 10; }
+        .stat-card { background: var(--panel-bg); padding: 0.8rem 2.2rem; border-radius: 100px; box-shadow: var(--tile-inset); display: flex; align-items: center; margin: 0 25px; border: 1px solid rgba(0,0,0,0.2); }
+        .stat-val { font-size: 2rem; font-weight: 300; color: var(--text-gold); margin-left: 12px; }
+        .stat-lab { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 2px; }
+
+        .notes-container {
+            position: fixed;
+            left: 40px;
+            top: 80px;
+            bottom: 40px;
+            width: 240px;
+            display: flex;
+            flex-direction: column;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .sticky-note {
+            background: #fdf2d0;
+            color: #4b3621;
+            width: 210px;
+            min-height: 120px;
+            padding: 30px 20px 20px;
+            box-shadow: 10px 10px 25px rgba(0,0,0,0.5);
+            transform: rotate(-2deg);
+            position: relative;
+            margin-bottom: 35px;
+            border-radius: 2px;
+            font-size: 1rem;
+            line-height: 1.4;
+            display: flex; align-items: center; justify-content: center; text-align: center;
+            pointer-events: auto;
+        }
+        .sticky-note::before {
+            content: '';
+            position: absolute;
+            top: 10px; left: 50%;
+            margin-left: -7px;
+            width: 14px; height: 14px;
+            background: #cc0000;
+            border-radius: 50%;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.6);
+            z-index: 2;
+        }
+
+        /* Enhanced Media Widget */
+        .media-widget {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--panel-bg);
+            padding: 18px 28px;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            box-shadow: var(--tile-inset);
+            width: 400px;
+            z-index: 10;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+        .coffee-icon {
+            font-size: 2.4rem;
+            background: #453232;
+            padding: 14px;
+            border-radius: 50%;
+            box-shadow: var(--tile-outset);
+            margin-right: 22px;
+            cursor: pointer;
+        }
+        .coffee-icon:active { box-shadow: var(--tile-inset); transform: scale(0.95); }
+        
+        .media-ctrl-btn { font-size: 1.5rem; cursor: pointer; color: var(--text-dim); padding: 5px 10px; }
+        .media-ctrl-btn:hover { color: var(--text-gold); }
+        .media-ctrl-btn:active { transform: scale(0.9); }
+
+        .bar-bg { background: rgba(0,0,0,0.4); height: 8px; border-radius: 4px; overflow: hidden; margin-top: 10px; box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5); }
+        .bar-fill { height: 100%; background: var(--accent); width: 0%; box-shadow: 0 0 12px var(--accent); transition: width 1s linear; }
+
+        .toast {
+            position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+            background: var(--accent); color: white; padding: 14px 28px;
+            border-radius: 50px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 2000;
+            opacity: 0; pointer-events: none; font-weight: 600;
+        }
+        .toast.show { opacity: 1; bottom: 140px; }
+
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-card { background: #362626; width: 95%; max-width: 600px; border-radius: 30px; padding: 2.5rem; box-shadow: 0 25px 60px rgba(0,0,0,0.7); border: 1px solid #453232; }
+        .tabs { display: flex; margin-bottom: 1.5rem; border-bottom: 2px solid #453232; padding-bottom: 12px; }
+        .tab { padding: 10px 20px; cursor: pointer; color: var(--text-dim); border-radius: 12px; margin-right: 12px; font-weight: 600; }
+        .tab.active { background: var(--accent); color: #fff; box-shadow: var(--tile-outset); }
+
+        @media (max-width: 1024px) {
+            #clock { font-size: 8rem; }
+            .grid { padding: 20px 25px; }
+            .tile { width: 80px; height: 110px; margin: 0 10px; }
+            .stat-card { margin: 0 15px; padding: 0.7rem 1.8rem; }
+            .media-widget { width: 340px; padding: 15px 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+    <div class="notes-container" id="notes"></div>
+
+    <div class="header">
+        <button onclick="toggleDark()" style="background:none; border:none; font-size:2rem; cursor:pointer; opacity: 0.7;">🌓</button>
+        <button onclick="openM()" style="background:none; border:none; font-size:2rem; cursor:pointer; opacity: 0.7;">⚙️</button>
+    </div>
+
+    <div class="clock-section">
+        <div id="clock">00:00</div>
+        <div id="date">Welcome Home</div>
+    </div>
+
+    <div class="grid">
+        <div class="tile" id="r1" onclick="t(1)"><div class="icon">🔌</div><div class="label">Charger</div></div>
+        <div class="tile" id="r2" onclick="t(2)"><div class="icon">💡</div><div class="label">Lamp</div></div>
+        <div class="tile" id="r3" onclick="t(3)"><div class="icon">🔋</div><div class="label">Outlet</div></div>
+        <div class="tile" id="r4" onclick="t(4)"><div class="icon">💻</div><div class="label">Work</div></div>
+        <div class="tile" id="r5" onclick="t(5)"><div class="icon">🌬️</div><div class="label">Fan</div></div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-card"><span class="stat-lab">Temp</span><span class="stat-val" id="tDisp">--°</span></div>
+        <div class="stat-card"><span class="stat-lab">Humi</span><span class="stat-val" id="hDisp">--%</span></div>
+    </div>
+
+    <div class="media-widget">
+        <div class="coffee-icon" id="media-play" onclick="mediaCmd('toggle')">☕</div>
+        <div class="track-info" style="flex-grow: 1;">
+            <span style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">Speaker Hub</span>
+            <div style="font-weight: 700; margin-bottom: 2px; color: var(--text-gold);" id="sStatus">Initializing...</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim);">Battery • <span id="sBat">--%</span></div>
+            <div class="bar-bg"><div id="sBar" class="bar-fill"></div></div>
+        </div>
+        <div style="display: flex; align-items: center; margin-left: 10px;">
+            <div class="media-ctrl-btn" onclick="mediaCmd('prev')">⏮</div>
+            <div class="media-ctrl-btn" onclick="mediaCmd('next')">⏭</div>
+        </div>
+    </div>
+
+    <div id="modal">
+        <div class="modal-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                <h2 style="font-family: 'Playfair Display', serif; color: #e4d4bc; font-size: 2rem;">Control Panel</h2>
+                <button onclick="closeM()" style="background:none; border:none; font-size:2rem; cursor:pointer; color:var(--text-dim);">✕</button>
+            </div>
+            <div class="tabs">
+                <div class="tab active" onclick="setTab(0)">New Routine</div>
+                <div class="tab" onclick="setTab(1)">Active Tasks</div>
+                <div class="tab" onclick="setTab(2)">Config</div>
+            </div>
+
+            <div class="tab-content active" id="tab0">
+                <select id="typeS" onchange="toggleType()">
+                    <option value="timer">Quick Timer (Minutes)</option>
+                    <option value="schedule">Daily Schedule (Time)</option>
+                </select>
+                <select id="rSel">
+                    <option value="room/switch/relay_1/command">Charger</option>
+                    <option value="room/switch/relay_2/command">Lamp</option>
+                    <option value="room/switch/relay_3/command">Outlet</option>
+                    <option value="room/switch/relay_4/command">Work</option>
+                    <option value="room/switch/relay_5/command">Fan</option>
+                </select>
+                <select id="aSel"><option value="OFF">Turn OFF</option><option value="ON">Turn ON</option></select>
+                <input type="number" id="valI" placeholder="Minutes">
+                <input type="time" id="timeI" style="display:none;">
+                <div id="dayS" style="display:none; margin:15px 0; font-size:0.9rem;">
+                    <label style="margin-right: 10px;"><input type="checkbox" value="1" checked> M</label>
+                    <label style="margin-right: 10px;"><input type="checkbox" value="2" checked> T</label>
+                    <label style="margin-right: 10px;"><input type="checkbox" value="3" checked> W</label>
+                    <label style="margin-right: 10px;"><input type="checkbox" value="4" checked> T</label>
+                    <label style="margin-right: 10px;"><input type="checkbox" value="5" checked> F</label>
+                    <label style="margin-right: 10px;"><input type="checkbox" value="6" checked> S</label>
+                    <label><input type="checkbox" value="0" checked> S</label>
+                </div>
+                <button class="btn" onclick="addR()">Activate</button>
+            </div>
+
+            <div class="tab-content" id="tab1">
+                <div id="routineList"></div>
+            </div>
+
+            <div class="tab-content" id="tab2">
+                <input type="text" id="hostI" placeholder="MQTT Host">
+                <input type="number" id="portI" placeholder="Port">
+                <button class="btn" onclick="saveS()">Update Connection</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showToast(msg) {
+            var t = document.getElementById('toast');
+            t.innerText = msg;
+            t.className = 'toast show';
+            setTimeout(function() { t.className = 'toast'; }, 3000);
+        }
+
+        var cfg = { 
+            h: localStorage.getItem('mq_h') || "100.125.241.104", 
+            p: parseInt(localStorage.getItem('mq_p')) || 9001 
+        };
+
+        function toggleDark() { document.body.classList.toggle('dark'); }
+
+        var cli = new Paho.MQTT.Client(cfg.h, cfg.p, "MochaUI_" + Math.random().toString(16).slice(2, 6));
+
+        function updateClock() {
+            var n = new Date();
+            var h = n.getHours().toString();
+            var m = n.getMinutes().toString();
+            if (h.length < 2) h = "0" + h;
+            if (m.length < 2) m = "0" + m;
+            document.getElementById('clock').innerText = h + ":" + m;
+            document.getElementById('date').innerText = n.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        }
+        setInterval(updateClock, 1000); 
+        updateClock();
+
+        function t(id) {
+            if (!cli.isConnected()) { showToast("Not connected to MQTT"); return; }
+            var el = document.getElementById('r' + id);
+            var val = el.className.indexOf('active') !== -1 ? "OFF" : "ON";
+            var m = new Paho.MQTT.Message(val);
+            m.destinationName = "room/switch/relay_" + id + "/command";
+            m.retained = true;
+            cli.send(m);
+        }
+
+        function mediaCmd(cmd) {
+            if (!cli.isConnected()) { showToast("Not connected to MQTT"); return; }
+            var m = new Paho.MQTT.Message(cmd.toUpperCase());
+            // Using a generic room/media topic - ESP32 should act as BLE HID Keyboard
+            m.destinationName = "room/media/command";
+            cli.send(m);
+            showToast("Media: " + cmd);
+        }
+
+        cli.onConnectionLost = function(e) { 
+            showToast("Connection Lost. Retrying...");
+            setTimeout(function() { cli.connect({ onSuccess: onConn, useSSL: false }); }, 5000);
+        };
+
+        function onConn() { 
+            cli.subscribe("room/#"); 
+            showToast("Connected to Mocha Broker"); 
+        }
+
+        cli.onMessageArrived = function(m) {
+            var topic = m.destinationName;
+            var payload = m.payloadString;
+            
+            if(topic.indexOf("relay_") !== -1) {
+                var match = topic.match(/relay_(\d)/);
+                if (match) {
+                    var id = match[1];
+                    var el = document.getElementById('r'+id);
+                    if (payload === "ON") el.className = "tile active";
+                    else el.className = "tile";
+                }
+            }
+            if(topic === "room/sensor/temp/state") document.getElementById('tDisp').innerText = Math.round(parseFloat(payload)) + "°";
+            if(topic === "room/sensor/humi/state") document.getElementById('hDisp').innerText = Math.round(parseFloat(payload)) + "%";
+            if(topic === "room/sensor/speaker_battery/state") {
+                document.getElementById('sBat').innerText = payload + "%";
+                document.getElementById('sBar').style.width = payload + "%";
+            }
+            if(topic === "room/sensor/speaker_status/state" || topic === "room/sensor/speaker_presence/state") {
+                var status = (payload === "ON" || payload === "online") ? "Speaker Connected" : "Speaker Offline";
+                document.getElementById('sStatus').innerText = status;
+            }
+            if(topic === "room/media/status") {
+                try {
+                    var data = JSON.parse(payload);
+                    document.getElementById('sStatus').innerText = data.title;
+                    var artEl = document.getElementById('media-play');
+                    if (data.albumArt) {
+                        artEl.innerHTML = '<img src="' + data.albumArt + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">';
+                        artEl.style.padding = "0";
+                    } else {
+                        artEl.innerHTML = "☕";
+                        artEl.style.padding = "14px";
+                    }
+                    var bar = document.getElementById('sBar');
+                    if (data.duration > 0) {
+                        var pct = (data.progress / data.duration) * 100;
+                        bar.style.width = pct + "%";
+                    }
+                } catch(e) {}
+            }
+            if(topic === "room/routine/list") { 
+                try { renderRoutines(JSON.parse(payload)); } catch(e) {} 
+            }
+            if(topic === "room/memo/list") { 
+                try { renderMemos(JSON.parse(payload)); } catch(e) {} 
+            }
+            if(topic === "room/notify") showToast(payload);
+        };
+
+        function renderRoutines(list) {
+            var container = document.getElementById('routineList');
+            if(!container) return;
+            container.innerHTML = list.length ? "" : "<p style='color:var(--text-dim)'>No active tasks.</p>";
+            for (var i = 0; i < list.length; i++) {
+                var r = list[i];
+                var item = document.createElement('div');
+                item.className = 'routine-item';
+                var relayMatch = r.target.match(/relay_(\d)/);
+                var relayName = relayMatch ? relayMatch[1] : "?";
+                var info = r.type === 'timer' ? "Ends in " + Math.round((r.triggerAt - Date.now())/60000) + "m" : r.time;
+                item.innerHTML = '<span><b>' + r.action + '</b> R' + relayName + ' • ' + info + '</span><button class="del-btn" onclick="delR(\'' + r.id + '\')">✕</button>';
+                container.appendChild(item);
+            }
+        }
+
+        function renderMemos(memos) {
+            var container = document.getElementById('notes');
+            if(!container) return;
+            container.innerHTML = "";
+            for (var i = 0; i < memos.length; i++) {
+                var m = memos[i];
+                var note = document.createElement('div');
+                note.className = 'sticky-note';
+                note.innerHTML = m.text;
+                note.setAttribute('data-id', m.id);
+                applySwipeLogic(note);
+                container.appendChild(note);
+            }
+        }
+
+        function applySwipeLogic(el) {
+            var startX = 0, currentX = 0, isDragging = false;
+            var onStart = function(e) { 
+                startX = (e.type === 'mousedown' ? e.clientX : e.touches[0].clientX); 
+                isDragging = true; 
+                el.style.transition = 'none'; 
+            };
+            var onMove = function(e) { 
+                if (!isDragging) return; 
+                currentX = (e.type === 'mousemove' ? e.clientX : e.touches[0].clientX) - startX; 
+                if (currentX > 0) { 
+                    el.style.transform = 'translateX(' + currentX + 'px) rotate(' + (currentX/10) + 'deg)'; 
+                    el.style.opacity = 1 - (currentX / 300); 
+                } 
+            };
+            var onEnd = function() { 
+                if (!isDragging) return; 
+                isDragging = false; 
+                el.style.transition = 'all 0.3s ease'; 
+                if (currentX > 150) { 
+                    el.style.transform = 'translateX(500px)'; 
+                    el.style.opacity = '0'; 
+                    delMemo(el.getAttribute('data-id')); 
+                } else { 
+                    el.style.transform = ''; 
+                    el.style.opacity = '1'; 
+                } 
+                currentX = 0; 
+            };
+            el.addEventListener('mousedown', onStart); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onEnd);
+            el.addEventListener('touchstart', onStart); el.addEventListener('touchmove', onMove); el.addEventListener('touchend', onEnd);
+        }
+
+        function addR() {
+            var type = document.getElementById('typeS').value;
+            var cmd = { 
+                op: type, 
+                target: document.getElementById('rSel').value, 
+                action: document.getElementById('aSel').value 
+            };
+            if(type === 'timer') cmd.minutes = parseInt(document.getElementById('valI').value);
+            else { 
+                cmd.time = document.getElementById('timeI').value; 
+                var days = [];
+                var checks = document.querySelectorAll('#dayS input:checked');
+                for (var i = 0; i < checks.length; i++) days.push(parseInt(checks[i].value));
+                cmd.days = days;
+            }
+            var m = new Paho.MQTT.Message(JSON.stringify(cmd)); 
+            m.destinationName = "room/routine/cmd"; 
+            cli.send(m); 
+            setTab(1);
+        }
+
+        function delR(id) { 
+            var m = new Paho.MQTT.Message(JSON.stringify({op:'delete', id: id.toString()})); 
+            m.destinationName = "room/routine/cmd"; 
+            cli.send(m); 
+        }
+        function delMemo(id) { 
+            var m = new Paho.MQTT.Message(JSON.stringify({op:'delete', id: id.toString()})); 
+            m.destinationName = "room/memo/cmd"; 
+            cli.send(m); 
+        }
+        function toggleType() { 
+            var isT = document.getElementById('typeS').value === 'timer'; 
+            document.getElementById('valI').style.display = isT ? 'block' : 'none'; 
+            document.getElementById('timeI').style.display = isT ? 'none' : 'block'; 
+            document.getElementById('dayS').style.display = isT ? 'none' : 'block'; 
+        }
+        
+        cli.connect({ onSuccess: onConn, useSSL: false });
+
+        function openM() { 
+            document.getElementById('hostI').value = cfg.h; 
+            document.getElementById('portI').value = cfg.p; 
+            document.getElementById('modal').style.display = 'flex'; 
+        }
+        function closeM() { document.getElementById('modal').style.display = 'none'; }
+        function saveS() { 
+            localStorage.setItem('mq_h', document.getElementById('hostI').value); 
+            localStorage.setItem('mq_p', document.getElementById('portI').value); 
+            location.reload(); 
+        }
+        function setTab(idx) {
+            var tabs = document.querySelectorAll('.tab');
+            var conts = document.querySelectorAll('.tab-content');
+            for (var i = 0; i < tabs.length; i++) {
+                tabs[i].className = (i === idx) ? "tab active" : "tab";
+                conts[i].style.display = (i === idx) ? "block" : "none";
+            }
+        }
+    </script>
+</body>
+</html>
