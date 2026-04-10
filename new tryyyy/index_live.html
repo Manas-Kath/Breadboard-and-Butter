@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EcoWatt Connect Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="var(--orange)" stroke="var(--orange)" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <span class="logo-text">EcoWatt</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">MAIN</div>
+      <a href="#" class="nav-item active" data-tip="Dashboard">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-tip="Analytics">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        <span>Analytics</span>
+      </a>
+      <a href="#" class="nav-item" data-tip="Devices">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+          <line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
+        </svg>
+        <span>Devices</span>
+      </a>
+      <a href="#" class="nav-item" data-tip="Rooms">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        <span>Rooms</span>
+      </a>
+
+      <div class="nav-section-label" style="margin-top:24px">MANAGE</div>
+      <a href="#" class="nav-item" data-tip="Schedules">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span>Schedules</span>
+      </a>
+      <a href="#" class="nav-item" data-tip="Reports">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        <span>Reports</span>
+      </a>
+      <a href="#" class="nav-item" data-tip="Alerts">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+        </svg>
+        <span>Alerts</span>
+        <span class="nav-badge">3</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="#" class="nav-item" data-tip="Settings">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+        <span>Settings</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- MAIN WRAPPER -->
+  <div class="main-wrapper">
+
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-left">
+        <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="header-title">
+          <h1>EcoWatt Connect</h1>
+          <span class="header-subtitle">Smart Energy Dashboard</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div id="brokerStatus" class="live-chip" style="background: rgba(255,0,0,0.1); color: #ff4444; border: 1px solid #ff4444;">
+          BROKER: OFFLINE
+        </div>
+        <div id="dbStatus" class="live-chip" style="background: rgba(255,0,0,0.1); color: #ff4444; border: 1px solid #ff4444; margin-left: 10px;">
+          DB: OFFLINE
+        </div>
+        <div class="live-chip" style="margin-left: 10px;">
+          <span class="live-dot"></span>
+          LIVE
+        </div>
+        <div class="date-chip" id="liveClock">—</div>
+        <button class="icon-btn notif-btn" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+          </svg>
+          <span class="notif-badge">3</span>
+        </button>
+        <div class="user-avatar">AK</div>
+      </div>
+    </header>
+
+    <!-- DASHBOARD CONTENT -->
+    <main class="dashboard">
+
+      <!-- TOP ROW: Gauge + Stats -->
+      <section class="top-row">
+
+        <!-- Power Gauge Card -->
+        <div class="card gauge-card">
+          <div class="card-header">
+            <div>
+              <div class="card-label">Real-Time Power</div>
+              <div class="card-title">Live Consumption</div>
+            </div>
+            <div class="status-pill active">
+              <span class="dot"></span> Active
+            </div>
+          </div>
+
+          <div class="gauge-wrapper">
+            <svg class="gauge-svg" viewBox="0 0 220 180" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style="stop-color:#ff4500"/>
+                  <stop offset="100%" style="stop-color:#ff9d00"/>
+                </linearGradient>
+                <filter id="glow">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+              <!-- Track -->
+              <path class="gauge-track" d="M 30 155 A 80 80 0 1 1 190 155" fill="none" stroke="#2a2a2a" stroke-width="14" stroke-linecap="round"/>
+              <!-- Progress -->
+              <path class="gauge-progress" id="gaugeArc" d="M 30 155 A 80 80 0 1 1 190 155" fill="none" stroke="url(#gaugeGrad)" stroke-width="14" stroke-linecap="round" filter="url(#glow)" stroke-dasharray="251 251" stroke-dashoffset="75"/>
+              <!-- Tick marks -->
+              <g stroke="#333" stroke-width="1.5">
+                <line x1="110" y1="20" x2="110" y2="30"/>
+                <line x1="50" y1="45" x2="57" y2="52"/>
+                <line x1="170" y1="45" x2="163" y2="52"/>
+                <line x1="20" y1="110" x2="30" y2="110"/>
+                <line x1="200" y1="110" x2="190" y2="110"/>
+              </g>
+              <!-- Center value -->
+              <text x="110" y="128" text-anchor="middle" class="gauge-value" id="gaugeValue">2.18</text>
+              <text x="110" y="148" text-anchor="middle" class="gauge-unit">kW</text>
+              <text x="30" y="172" text-anchor="middle" class="gauge-min">0</text>
+              <text x="190" y="172" text-anchor="middle" class="gauge-min">5</text>
+            </svg>
+
+            <div class="gauge-stats">
+              <div class="gstat">
+                <span class="gstat-label">Today</span>
+                <span class="gstat-val" id="todayUsage">14.6 kWh</span>
+              </div>
+              <div class="gstat">
+                <span class="gstat-label">Peak</span>
+                <span class="gstat-val peak" id="peakPower">3.74 kW</span>
+              </div>
+              <div class="gstat">
+                <span class="gstat-label">Est. Cost</span>
+                <span class="gstat-val" id="estCost">₹87.20</span>
+              </div>
+              <div class="gstat">
+                <span class="gstat-label">CO₂</span>
+                <span class="gstat-val" id="co2Val">11.3 kg</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="usage-bar-wrapper">
+            <div class="usage-bar-labels">
+              <span>Usage vs Limit</span>
+              <span id="usagePercent">44%</span>
+            </div>
+            <div class="usage-bar-track">
+              <div class="usage-bar-fill" id="usageBarFill" style="width:44%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Column -->
+        <div class="stats-col">
+          <div class="card stat-card">
+            <div class="stat-icon-wrap orange">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">Active Devices</div>
+              <div class="stat-value" id="activeDevices">7</div>
+              <div class="stat-change up">+2 from last hour</div>
+            </div>
+          </div>
+
+          <div class="card stat-card">
+            <div class="stat-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">Uptime Today</div>
+              <div class="stat-value">18h 42m</div>
+              <div class="stat-change">Since 5:18 AM</div>
+            </div>
+          </div>
+
+          <div class="card stat-card">
+            <div class="stat-icon-wrap green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">Monthly Savings</div>
+              <div class="stat-value">₹1,240</div>
+              <div class="stat-change up">↑ 18% vs last month</div>
+            </div>
+          </div>
+
+          <div class="card stat-card alert-stat">
+            <div class="stat-icon-wrap warn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">Active Alerts</div>
+              <div class="stat-value orange-text" id="alertCount">3</div>
+              <div class="stat-change warn-text">Requires attention</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MIDDLE ROW: Room Chart + Line Graph -->
+      <section class="mid-row">
+
+        <!-- Room Usage Bar Chart -->
+        <div class="card chart-card">
+          <div class="card-header">
+            <div>
+              <div class="card-label">Breakdown</div>
+              <div class="card-title">Room-Wise Usage</div>
+            </div>
+            <select class="chart-select" id="roomPeriod">
+              <option>Today</option>
+              <option>This Week</option>
+              <option>This Month</option>
+            </select>
+          </div>
+          <div class="bar-chart" id="barChart"></div>
+        </div>
+
+        <!-- Daily Line Graph -->
+        <div class="card chart-card">
+          <div class="card-header">
+            <div>
+              <div class="card-label">Trend</div>
+              <div class="card-title">24h Power Curve</div>
+            </div>
+            <div class="legend-chip">
+              <span class="legend-dot orange"></span> kW
+            </div>
+          </div>
+          <div class="line-chart-wrapper">
+            <canvas id="lineChart" width="400" height="180"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- BOTTOM ROW: Devices + Savings + Alerts -->
+      <section class="bot-row">
+
+        <!-- Top Consumers -->
+        <div class="card consumers-card">
+          <div class="card-header">
+            <div>
+              <div class="card-label">Power Hogs</div>
+              <div class="card-title">Top Consumers</div>
+            </div>
+          </div>
+          <div class="consumers-list" id="consumersList"></div>
+        </div>
+
+        <!-- Savings Summary -->
+        <div class="card savings-card">
+          <div class="card-header">
+            <div>
+              <div class="card-label">Efficiency</div>
+              <div class="card-title">Power Savings</div>
+            </div>
+            <div class="savings-badge">This Month</div>
+          </div>
+          <div class="savings-body">
+            <div class="savings-ring-wrap">
+              <svg class="savings-ring" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="48" fill="none" stroke="#222" stroke-width="10"/>
+                <circle cx="60" cy="60" r="48" fill="none" stroke="var(--orange)" stroke-width="10"
+                  stroke-dasharray="301.6" stroke-dashoffset="90" stroke-linecap="round"
+                  transform="rotate(-90 60 60)" id="savingsRing"/>
+                <text x="60" y="56" text-anchor="middle" class="ring-pct" id="savingsPct">70%</text>
+                <text x="60" y="72" text-anchor="middle" class="ring-label">Goal</text>
+              </svg>
+            </div>
+            <div class="savings-metrics">
+              <div class="smetric">
+                <span class="smetric-label">Energy Saved</span>
+                <span class="smetric-val orange-text">0.0 kWh</span>
+              </div>
+              <div class="smetric">
+                <span class="smetric-label">Cost Saved</span>
+                <span class="smetric-val orange-text">₹0.00</span>
+              </div>
+              <div class="smetric">
+                <span class="smetric-label">Solar Gen.</span>
+                <span class="smetric-val">0.0 kWh</span>
+              </div>
+              <div class="smetric">
+                <span class="smetric-label">Efficiency Score</span>
+                <span class="smetric-val orange-text">A+</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alerts Panel -->
+        <div class="card alerts-card">
+          <div class="card-header">
+            <div>
+              <div class="card-label">Notifications</div>
+              <div class="card-title">Alerts</div>
+            </div>
+            <button class="clear-btn" id="clearAlerts">Clear all</button>
+          </div>
+          <div class="alerts-list" id="alertsList"></div>
+        </div>
+
+      </section>
+    </main>
+  </div>
+
+  <!-- Mobile overlay -->
+  <div class="overlay" id="overlay"></div>
+
+  <script src="script_live.js"></script>
+</body>
+</html>ml>
